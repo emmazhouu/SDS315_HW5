@@ -1,0 +1,152 @@
+---
+title: "**HW 5 2/29/24**"
+author: "Emma Zhou - ez4493 - SDS 315"
+output:
+  html_document:
+  pdf_document:  
+    toc: true
+    toc_float: yes
+---
+
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(fig.height=4, fig.width=6, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=60))
+```
+
+------------------------------------------------------------------------
+
+Link to GitHub: https://github.com/emmazhouu/SDS315_HW5
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(mosaic)
+library(knitr)
+```
+
+## **Q1**
+Null hypothesis: Securities trades from Iron Bank are flagged at the same 2.4% baseline rate as that of other traders.
+
+Test statistic: 70 trades were flagged out of 2021
+
+```{r echo=FALSE}
+sim_flags <- do(100000) * nflip(2021, 0.024)
+ggplot(sim_flags) + geom_histogram(aes(x = nflip), fill = 'darkblue', binwidth = 1)
+```
+
+```{r echo=FALSE, results='hide'}
+sum(sim_flags >= 70) / 100000
+```
+
+The p-value is ~0.002.
+
+Thus, I think the null hypothesis is not plausible because the low p-value implies that the chances of 70 out of 2021 trades or more being flagged by regular chance at the baseline rate of 2.4% is very low. Out of 100,000 simulations of 2021 security trades, only 169 simulations saw 70+ trades flagged, suggesting that the flagging at Iron Bank could be due to something else, not the baseline rate.
+
+## **Q2**
+Null hypothesis: Gourmet Bites' rate of health code violations is at the same citywide average of 3%.
+
+Test statistic: 8 out of 50 Gourmet Bites' inspections resulted in health code violations reported
+```{r echo=FALSE}
+sim_inspect <- do(100000) * nflip(50, 0.03)
+ggplot(sim_inspect) + geom_histogram(aes(x = nflip), fill = 'darkblue', binwidth = 1)
+```
+
+```{r echo=FALSE, results='hide'}
+sum(sim_inspect >= 8) / 100000
+```
+
+The p-value is ~0.0001. 
+
+Thus, I think the null hypothesis is not plausible because the very small p-value implies that the chances of 8 out of 50 inspections or more being reported for health code violations at the average rate of 3% due to random issues is very low, even impossible. Out of 100,000 simulations of 50 inspections, only 13 simulations saw 8+ health code violations, suggesting that the higher-than-usual number of health code violations could be due to something else and reflect an actual health code issue, unrelated to the average rate of random issues found typically.
+
+## **Q3**
+### **A)**
+```{r echo=FALSE, warning=FALSE, results='hide'}
+letter_freq <- read.csv('letter_frequencies.csv')
+brown_sent <- readLines('brown_sentences.txt')
+
+brown_chi_squared <- numeric(length(brown_sent))
+
+calculate_chi_squared <- function(sentence, freq_table) {
+  freq_table$Probability = freq_table$Probability / sum(freq_table$Probability)
+  
+  # Remove non-letters and convert to uppercase
+  clean_sentence = gsub("[^A-Za-z]", "", sentence)
+  clean_sentence = toupper(clean_sentence)
+  
+  # Count the occurrences of each letter in the sentence
+  observed_counts = table(factor(strsplit(clean_sentence, "")[[1]], levels = freq_table$Letter))
+  
+  # Calculate expected counts
+  total_letters = sum(observed_counts)
+  expected_counts = total_letters * freq_table$Probability
+  
+  # Chi-squared statistic
+  chi_squared_stat = sum((observed_counts - expected_counts)^2 / expected_counts)
+  
+  return(chi_squared_stat)
+}
+
+for (i in seq_along(brown_sent)) {
+ brown_chi_squared[i] <- calculate_chi_squared(brown_sent[i], letter_freq)
+}
+
+brown_chi_squared <- as_tibble(brown_chi_squared)
+
+ggplot(brown_chi_squared) + geom_histogram(aes(x = value))
+```
+
+### **B)**
+
+```{r echo=FALSE, results='hide'}
+sentences <- c(
+  "She opened the book and started to read the first chapter, eagerly anticipating what might come next.",
+  "Despite the heavy rain, they decided to go for a long walk in the park, crossing the main avenue by the fountain in the center.",
+  "The museum’s new exhibit features ancient artifacts from various civilizations around the world.",
+  "He carefully examined the document, looking for any clues that might help solve the mystery.",
+  "The students gathered in the auditorium to listen to the guest speaker’s inspiring lecture.",
+  "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland.",
+  "The chef demonstrated how to prepare a delicious meal using only locally sourced ingredients, focusing mainly on some excellent dinner recipes from Spain.",
+  "They watched the sunset from the hilltop, marveling at the beautiful array of colors in the sky.",
+  "The committee reviewed the proposal and provided many points of useful feedback to improve the project’s effectiveness.",
+  "Despite the challenges faced during the project, the team worked tirelessly to ensure its successful completion, resulting in a product that exceeded everyone’s expectations."
+)
+
+
+# finding chi-squared for test sentences
+
+test_chi_squared <- numeric(10)
+
+for (i in seq_along(sentences)){
+test_chi_squared[i] <- calculate_chi_squared(sentences[i], letter_freq)
+}
+
+test_chi_squared <- as_tibble(test_chi_squared)
+
+# finding p-values
+
+test_p_values <- numeric(10)
+
+for (i in seq_len(nrow(test_chi_squared))) {
+  p_value <- sum(brown_chi_squared >= unlist(test_chi_squared[i,])) / nrow(brown_chi_squared)
+  test_p_values[i] <- p_value
+}
+
+test_p_values <- round(as_tibble(test_p_values), 3)
+
+test_p_values <- test_p_values %>%
+  mutate(sentence_num = c(1:10)) %>%
+  select(sentence_num, everything())
+
+test_p_values
+```
+
+```{r echo=FALSE}
+kable(test_p_values, align = 'c', caption = '<center> **p-values of Test Sentences 1-10** </center>')
+```
+Sentence 6 was produced by a LLM because its p-value was 0.009, which is noticeably lower than the rest of the p-values. The probability of a reference chi-squared value to be a large or bigger than sentence 6's is 0.009, which is very low. This means the letter frequencies of sentence 6 are abnormal compared to "normal" English sentences from the Brown Corpus.
+
+
+
+
